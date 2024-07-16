@@ -55,6 +55,38 @@ app.delete('/usuarios/:id', (req, res) => {
     excluir(id, res);
 });
 
+// Rota para login
+app.post('/login', async (req, res) => {
+    const { email, senha } = req.body;
+
+    const sql = "SELECT * FROM usuarios WHERE email = ?";
+    conexao.query(sql, [email], async (erro, resultados) => {
+        if (erro) {
+            res.status(500).json({ error: "Erro ao buscar usuário" });
+            return;
+        }
+
+        if (resultados.length === 0) {
+            res.status(401).json({ error: "Credenciais inválidas" });
+            return;
+        }
+
+        const usuario = resultados[0];
+
+        try {
+            const senhaValida = await bcrypt.compare(senha, usuario.senha);
+
+            if (senhaValida) {
+                res.status(200).json({ message: "Login bem-sucedido" });
+            } else {
+                res.status(401).json({ error: "Credenciais inválidas" });
+            }
+        } catch (erro) {
+            res.status(500).json({ error: "Erro ao verificar senha" });
+        }
+    });
+});
+
 // Executando o servidor 
 
 
