@@ -1,6 +1,8 @@
 import express from "express";
 import {ler, inserir, lerUm, atualizar, excluir} from "./src/usuarios.js";
 import cors from 'cors';
+import conexao from "./src/banco.js";
+import bcrypt from 'bcryptjs';
 
 const app = express();
 const porta = process.env.PORT || 8080;
@@ -55,6 +57,7 @@ app.delete('/usuarios/:id', (req, res) => {
     excluir(id, res);
 });
 
+
 // Rota para login
 app.post('/login', async (req, res) => {
     const { email, senha } = req.body;
@@ -62,6 +65,7 @@ app.post('/login', async (req, res) => {
     const sql = "SELECT * FROM usuarios WHERE email = ?";
     conexao.query(sql, [email], async (erro, resultados) => {
         if (erro) {
+            console.error("Erro ao buscar usuário:", erro);
             res.status(500).json({ error: "Erro ao buscar usuário" });
             return;
         }
@@ -82,10 +86,12 @@ app.post('/login', async (req, res) => {
                 res.status(401).json({ error: "Credenciais inválidas" });
             }
         } catch (erro) {
+            console.error("Erro ao verificar senha:", erro);
             res.status(500).json({ error: "Erro ao verificar senha" });
         }
     });
 });
+
 
 // Executando o servidor 
 
