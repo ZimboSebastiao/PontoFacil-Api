@@ -1,4 +1,4 @@
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import conexao from "./banco.js";
 
 // Função para validar o tipo de usuário

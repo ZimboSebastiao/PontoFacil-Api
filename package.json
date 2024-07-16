@@ -11,9 +11,12 @@
   "author": "Zimbo Sebastião",
   "license": "ISC",
   "dependencies": {
-    "bcrypt": "^5.1.1",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "mysql2": "^3.10.1"
+  },
+  "engines": {
+    "node": "20.15.1"
   }
 }
