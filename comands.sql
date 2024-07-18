@@ -13,3 +13,11 @@ CREATE TABLE `usuarios` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
+CREATE TABLE `registros` (
+  `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `usuario_id` SMALLINT NOT NULL,
+  `tipo_registro` ENUM('entrada', 'intervalo', 'fim_intervalo', 'saida') NOT NULL,
+  `data_hora` DATETIME NOT NULL,
+  `localizacao` VARCHAR(255) NULL,
+  FOREIGN KEY (`usuario_id`) REFERENCES `usuarios`(`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

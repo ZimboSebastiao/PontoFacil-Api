@@ -100,6 +100,58 @@ app.post('/login', async (req, res) => {
     });
 });
 
+// Função para verificar se o ponto já foi registrado
+async function pontoJaRegistrado(usuario_id, tipo_registro, data_hora) {
+    const data = new Date(data_hora);
+    const dataInicio = new Date(data.getFullYear(), data.getMonth(), data.getDate());
+    const dataFim = new Date(dataInicio);
+    dataFim.setDate(dataFim.getDate() + 1);
+  
+    try {
+      const [rows] = await conexao.promise().query(
+        'SELECT * FROM registros WHERE usuario_id = ? AND tipo_registro = ? AND data_hora BETWEEN ? AND ?',
+        [usuario_id, tipo_registro, dataInicio, dataFim]
+      );
+  
+      console.log('Resultado da consulta:', rows);
+  
+      if (!Array.isArray(rows)) {
+        throw new Error('O formato de retorno da consulta está incorreto.');
+      }
+  
+      return rows.length > 0;
+    } catch (error) {
+      console.error('Erro ao verificar ponto registrado:', error);
+      throw error;
+    }
+  }
+  
+  
+  
+  
+  
+  // Rota para registrar ponto
+  app.post('/registros', async (req, res) => {
+    const { usuario_id, tipo_registro, data_hora, localizacao } = req.body;
+  
+    try {
+      const registrado = await pontoJaRegistrado(usuario_id, tipo_registro, data_hora);
+  
+      if (registrado) {
+        return res.status(400).json({ message: `Já existe um registro do tipo ${tipo_registro} para hoje.` });
+      }
+  
+      await conexao.execute(
+        'INSERT INTO registros (usuario_id, tipo_registro, data_hora, localizacao) VALUES (?, ?, ?, ?)',
+        [usuario_id, tipo_registro, data_hora, localizacao]
+      );
+  
+      res.status(201).json({ message: 'Registro realizado com sucesso.' });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Erro ao registrar ponto.' });
+    }
+  });
 
 // Executando o servidor 
 
