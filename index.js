@@ -81,7 +81,15 @@ app.post('/login', async (req, res) => {
             const senhaValida = await bcrypt.compare(senha, usuario.senha);
 
             if (senhaValida) {
-                res.status(200).json({ message: "Login bem-sucedido" });
+                res.status(200).json({
+                    message: "Login bem-sucedido",
+                    usuario: {
+                        id: usuario.id,
+                        nome: usuario.nome,
+                        email: usuario.email,
+                        tipo: usuario.tipo
+                    }
+                });
             } else {
                 res.status(401).json({ error: "Credenciais inválidas" });
             }
