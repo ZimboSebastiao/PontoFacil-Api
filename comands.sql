@@ -21,3 +21,11 @@ CREATE TABLE `registros` (
   `localizacao` VARCHAR(255) NULL,
   FOREIGN KEY (`usuario_id`) REFERENCES `usuarios`(`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Conectar-se ao banco de dados pontofacil
+USE pontofacil;
+
+-- Alterar a tabela usuarios para adicionar as novas colunas
+ALTER TABLE `usuarios`
+ADD COLUMN `data_criacao` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN `funcao` VARCHAR(45);
