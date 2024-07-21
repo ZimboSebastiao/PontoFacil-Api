@@ -85,13 +85,19 @@ app.post("/login", async (req, res) => {
       const senhaValida = await bcrypt.compare(senha, usuario.senha);
 
       if (senhaValida) {
+        // Gerar o access token e refresh token
         const token = jwt.sign({ id: usuario.id }, JWT_SECRET, {
-          expiresIn: "1h",
-        }); // Gera o token
+          expiresIn: "1h", // 1 hora para o access token
+        });
+
+        const refreshToken = jwt.sign({ id: usuario.id }, JWT_SECRET, {
+          expiresIn: "7d", // 7 dias para o refresh token
+        });
 
         res.status(200).json({
           message: "Login bem-sucedido",
-          token, // Retorna o token ao usuário
+          token, // Retorna o access token ao usuário
+          refreshToken, // Retorna o refresh token ao usuário
           usuario: {
             id: usuario.id,
             nome: usuario.nome,
