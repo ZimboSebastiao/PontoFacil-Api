@@ -179,18 +179,34 @@ app.post("/registros", async (req, res) => {
 });
 
 // Rota para obter todos os registros do usuário logado
-app.get("/registros", async (req, res) => {
+app.get("/registros", autenticar, async (req, res) => {
   const usuario_id = req.user.id;
 
   try {
-    const [registros] = await conexao.execute(
-      "SELECT * FROM registros WHERE usuario_id = ?",
-      [usuario_id]
-    );
+    // Log para verificar o ID do usuário
+    console.log("ID do usuário:", usuario_id);
 
-    res.status(200).json(registros);
+    // Executa a consulta e obtém o resultado
+    const [rows] = await conexao
+      .promise()
+      .query("SELECT * FROM registros WHERE usuario_id = ?", [usuario_id]);
+
+    // Log para verificar o resultado da consulta
+    console.log("Resultado da consulta:", rows);
+
+    // Verifique a estrutura do resultado
+    if (!Array.isArray(rows)) {
+      throw new Error("O resultado da consulta não está no formato esperado.");
+    }
+
+    // Log para verificar os registros
+    console.log("Registros obtidos:", rows);
+
+    // Retorna os registros
+    res.status(200).json(rows);
   } catch (error) {
-    console.error(error);
+    // Adicione um log para capturar e exibir o erro
+    console.error("Erro ao obter registros:", error);
     res.status(500).json({ message: "Erro ao obter registros." });
   }
 });
