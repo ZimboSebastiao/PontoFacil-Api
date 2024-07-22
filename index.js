@@ -205,9 +205,48 @@ app.get("/registros", autenticar, async (req, res) => {
     // Retorna os registros
     res.status(200).json(rows);
   } catch (error) {
-    // Adicione um log para capturar e exibir o erro
+    // Log para capturar e exibir o erro
     console.error("Erro ao obter registros:", error);
     res.status(500).json({ message: "Erro ao obter registros." });
+  }
+});
+
+// Rota para obter registros do dia atual do usuário logado
+app.get("/registros-dia-atual", autenticar, async (req, res) => {
+  const usuario_id = req.user.id;
+
+  try {
+    // Adicione um log para verificar o ID do usuário
+    console.log("ID do usuário:", usuario_id);
+
+    // Obtém a data atual no formato 'YYYY-MM-DD'
+    const hoje = new Date().toISOString().slice(0, 10);
+
+    // Executa a consulta e obtém o resultado
+    const [rows] = await conexao
+      .promise()
+      .query(
+        "SELECT * FROM registros WHERE usuario_id = ? AND DATE(data_hora) = ?",
+        [usuario_id, hoje]
+      );
+
+    // Adicione um log para verificar o resultado da consulta
+    console.log("Resultado da consulta:", rows);
+
+    // Verifique a estrutura do resultado
+    if (!Array.isArray(rows)) {
+      throw new Error("O resultado da consulta não está no formato esperado.");
+    }
+
+    // Adicione um log para verificar os registros
+    console.log("Registros obtidos:", rows);
+
+    // Retorna os registros
+    res.status(200).json(rows);
+  } catch (error) {
+    // Adicione um log para capturar e exibir o erro
+    console.error("Erro ao obter registros do dia atual:", error);
+    res.status(500).json({ message: "Erro ao obter registros do dia atual." });
   }
 });
 
