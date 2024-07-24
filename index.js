@@ -105,6 +105,11 @@ app.post("/login", async (req, res) => {
             tipo: usuario.tipo,
             data_criacao: usuario.data_criacao,
             funcao: usuario.funcao,
+            empresa: usuario.empresa,
+            nacionalidade: usuario.nacionalidade,
+            endereco: usuario.endereco,
+            cep: usuario.cep,
+            celular: usuario.celular,
           },
         });
       } else {

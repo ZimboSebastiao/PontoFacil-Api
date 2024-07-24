@@ -29,3 +29,12 @@ USE pontofacil;
 ALTER TABLE `usuarios`
 ADD COLUMN `data_criacao` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 ADD COLUMN `funcao` VARCHAR(45);
+
+-- Alterar a tabela usuarios para adicionar as novas colunas
+ALTER TABLE `usuarios`
+ADD COLUMN `empresa` VARCHAR(90);
+ADD COLUMN `nacionalidade` VARCHAR(50);
+ADD COLUMN `endereco` VARCHAR(85);
+ADD COLUMN `cep` VARCHAR(8);
+ADD COLUMN `celular` VARCHAR(12);
+ADD COLUMN `data-nascimento` VARCHAR(12);
