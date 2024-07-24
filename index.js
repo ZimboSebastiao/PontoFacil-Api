@@ -110,6 +110,7 @@ app.post("/login", async (req, res) => {
             endereco: usuario.endereco,
             cep: usuario.cep,
             celular: usuario.celular,
+            data_nascimento: usuario.data_nascimento,
           },
         });
       } else {

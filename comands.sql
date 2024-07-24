@@ -38,3 +38,5 @@ ADD COLUMN `endereco` VARCHAR(85);
 ADD COLUMN `cep` VARCHAR(8);
 ADD COLUMN `celular` VARCHAR(12);
 ADD COLUMN `data-nascimento` VARCHAR(12);
+
+ALTER TABLE 'usuarios' CHANGE `data-nascimento` `data_nascimento` VARCHAR(12);
