@@ -1,3 +1,4 @@
+// src/banco.js
 import mysql2 from "mysql2";
 
 // Armazenando os dados da conexão em uma constante

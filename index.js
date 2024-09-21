@@ -1,5 +1,15 @@
+// index.js
+
 import express from "express";
-import { ler, inserir, lerUm, atualizar, excluir } from "./src/usuarios.js";
+import {
+  ler,
+  inserir,
+  lerUm,
+  atualizar,
+  excluir,
+  listarEmpresas,
+} from "./src/usuarios.js";
+import folhaPonto from "./src/folhaPonto.js";
 import cors from "cors";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -48,7 +58,7 @@ app.post("/usuarios", (req, res) => {
   inserir(novousuario, res);
 });
 
-// Atualizando dados de um aluo
+// Atualizando dados de um usuario
 app.patch("/usuarios/:id", (req, res) => {
   //res.send(`Atualizando um usuario`);
   const id = parseInt(req.params.id);
@@ -56,7 +66,7 @@ app.patch("/usuarios/:id", (req, res) => {
   atualizar(id, usuario, res);
 });
 
-// Atualizando dados de um aluo
+// Deletando dados de um usuario
 app.delete("/usuarios/:id", (req, res) => {
   //res.send(`Excluindo um usuario`);
   const id = parseInt(req.params.id);
@@ -111,6 +121,7 @@ app.post("/login", async (req, res) => {
             cep: usuario.cep,
             celular: usuario.celular,
             data_nascimento: usuario.data_nascimento,
+            senha: usuario.senha,
           },
         });
       } else {
@@ -281,6 +292,121 @@ app.get("/registros/ultimos-7-dias", autenticar, (req, res) => {
       res.status(200).json(resultados);
     }
   );
+});
+
+// Rota para criar funcionários (somente admin)
+app.post("/funcionarios", autenticar, async (req, res) => {
+  const adminId = req.user.id;
+  const { nome, email, senha, tipo } = req.body;
+
+  // Verificar se o usuário autenticado é um admin
+  const sqlAdmin = "SELECT * FROM usuarios WHERE id = ? AND tipo = 'admin'";
+  conexao.query(sqlAdmin, [adminId], async (err, results) => {
+    if (err) {
+      console.error("Erro ao verificar admin:", err);
+      return res.status(500).json({ error: "Erro ao verificar admin" });
+    }
+
+    if (results.length === 0) {
+      return res.status(403).json({
+        error: "Acesso negado. Somente admins podem criar funcionários.",
+      });
+    }
+
+    // Criptografar a senha
+    try {
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(senha, saltRounds);
+
+      // Inserir o novo funcionário no banco
+      const sqlInsert =
+        "INSERT INTO usuarios (nome, email, senha, tipo, empresa_id) VALUES (?, ?, ?, 'funcionario', (SELECT empresa_id FROM usuarios WHERE id = ?))";
+      conexao.query(
+        sqlInsert,
+        [nome, email, hashedPassword, adminId],
+        (error, results) => {
+          if (error) {
+            if (error.code === "ER_DUP_ENTRY") {
+              res.status(400).json({ error: "Email já existe" });
+            } else {
+              res.status(400).json(error.code);
+            }
+          } else {
+            res.status(201).json({ status: "Funcionário criado com sucesso" });
+          }
+        }
+      );
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao criptografar a senha" });
+    }
+  });
+});
+
+// Rota para gerar PDF
+app.get("/folha-ponto/:id", autenticar, (req, res) => {
+  const id = req.params.id;
+
+  // Buscar os dados do usuário
+  const sqlUsuario = "SELECT * FROM usuarios WHERE id = ?";
+  const sqlRegistros = `
+    SELECT * FROM registros 
+    WHERE usuario_id = ? 
+    AND MONTH(data_hora) = MONTH(CURRENT_DATE()) 
+    AND YEAR(data_hora) = YEAR(CURRENT_DATE())
+  `;
+
+  // Verificar se o usuário existe
+  conexao.query(sqlUsuario, [id], (erroUsuario, usuarioRes) => {
+    if (erroUsuario || usuarioRes.length === 0) {
+      console.log("Usuário não encontrado ou erro na consulta:", erroUsuario);
+      return res.status(404).json({ message: "Usuário não encontrado." });
+    }
+
+    const usuario = usuarioRes[0];
+
+    // Buscar registros do mês atual
+    conexao.query(sqlRegistros, [id], (erroRegistros, registrosRes) => {
+      if (erroRegistros) {
+        console.log("Erro ao buscar registros:", erroRegistros);
+        return res.status(500).json({ message: "Erro ao buscar registros." });
+      }
+
+      if (registrosRes.length === 0) {
+        console.log("Nenhum registro encontrado para o mês atual.");
+        return res
+          .status(404)
+          .json({ message: "Nenhum registro encontrado para este mês." });
+      }
+      console.log("Registros encontrados:", registrosRes);
+
+      // Processar os registros (somar horas e calcular pontos perdidos)
+      const totalHoras = registrosRes.reduce(
+        (acc, registro) => acc + (registro.horas_trabalhadas || 0),
+        0
+      );
+      const totalPontos = registrosRes.reduce(
+        (acc, registro) => acc + (registro.pontos_perdidos || 0),
+        0
+      );
+
+      const registros = {
+        totalHoras,
+        totalPontos,
+      };
+
+      console.log("Dados do usuário:", usuario);
+      console.log("Total de horas trabalhadas:", totalHoras);
+      console.log("Total de pontos perdidos:", totalPontos);
+
+      // Preencher o template e converter para PDF
+      folhaPonto(usuario, registros, res);
+    });
+  });
+});
+
+// Rota para listar todas as empresas
+app.get("/empresas", (req, res) => {
+  listarEmpresas(res);
 });
 
 // Executando o servidor

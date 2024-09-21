@@ -40,3 +40,25 @@ ADD COLUMN `celular` VARCHAR(12);
 ADD COLUMN `data-nascimento` VARCHAR(12);
 
 ALTER TABLE 'usuarios' CHANGE `data-nascimento` `data_nascimento` VARCHAR(12);
+
+
+-- Cria a tabela empresas
+CREATE TABLE `empresas` (
+  `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `nome` VARCHAR(90) NOT NULL,
+  `endereco` VARCHAR(255),
+  `cep` VARCHAR(8),
+  `telefone` VARCHAR(15)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+-- Adiciona a coluna empresa_id à tabela usuarios
+ALTER TABLE `usuarios`
+ADD COLUMN `empresa_id` INT,
+ADD FOREIGN KEY (`empresa_id`) REFERENCES `empresas`(`id`);
+
+
+INSERT INTO `empresas` (nome, endereco, cep, telefone)
+VALUES ('klandula Transportes', 'Rua Exemplo, 123', '12345-678', '11987654321');
+
+UPDATE `empresas` SET `nome` = 'kalandula Transportes' WHERE `empresas`.`id` = 1;
