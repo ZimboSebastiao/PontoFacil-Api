@@ -313,7 +313,7 @@ app.post("/funcionarios", autenticar, async (req, res) => {
       });
     }
 
-    // Obter o empresa_id
+    // Obter o empresa_id e nome da empresa
     const sqlEmpresaId = "SELECT empresa_id FROM usuarios WHERE id = ?";
     conexao.query(sqlEmpresaId, [adminId], async (error, empresaResults) => {
       if (error) {
@@ -326,34 +326,54 @@ app.post("/funcionarios", autenticar, async (req, res) => {
 
       const empresaId = empresaResults[0].empresa_id;
 
-      // Criptografar a senha
-      try {
-        const saltRounds = 10;
-        const hashedPassword = await bcrypt.hash(senha, saltRounds);
-
-        // Inserir o novo funcionário no banco
-        const sqlInsert =
-          "INSERT INTO usuarios (nome, email, senha, tipo, empresa_id) VALUES (?, ?, ?, 'funcionario', ?)";
-        conexao.query(
-          sqlInsert,
-          [nome, email, hashedPassword, empresaId],
-          (error, results) => {
-            if (error) {
-              if (error.code === "ER_DUP_ENTRY") {
-                res.status(400).json({ error: "Email já existe" });
-              } else {
-                res.status(400).json(error.code);
-              }
-            } else {
-              res
-                .status(201)
-                .json({ status: "Funcionário criado com sucesso" });
-            }
+      // Obter o nome da empresa
+      const sqlNomeEmpresa = "SELECT nome FROM empresas WHERE id = ?";
+      conexao.query(
+        sqlNomeEmpresa,
+        [empresaId],
+        async (error, empresaNomeResults) => {
+          if (error) {
+            return res
+              .status(500)
+              .json({ error: "Erro ao obter nome da empresa" });
           }
-        );
-      } catch (error) {
-        res.status(500).json({ error: "Erro ao criptografar a senha" });
-      }
+
+          if (empresaNomeResults.length === 0) {
+            return res.status(400).json({ error: "Empresa não encontrada" });
+          }
+
+          const nomeEmpresa = empresaNomeResults[0].nome;
+
+          // Criptografar a senha
+          try {
+            const saltRounds = 10;
+            const hashedPassword = await bcrypt.hash(senha, saltRounds);
+
+            // Inserir o novo funcionário no banco
+            const sqlInsert =
+              "INSERT INTO usuarios (nome, email, senha, tipo, empresa_id, empresa) VALUES (?, ?, ?, 'funcionario', ?, ?)";
+            conexao.query(
+              sqlInsert,
+              [nome, email, hashedPassword, empresaId, nomeEmpresa],
+              (error, results) => {
+                if (error) {
+                  if (error.code === "ER_DUP_ENTRY") {
+                    res.status(400).json({ error: "Email já existe" });
+                  } else {
+                    res.status(400).json(error.code);
+                  }
+                } else {
+                  res
+                    .status(201)
+                    .json({ status: "Funcionário criado com sucesso" });
+                }
+              }
+            );
+          } catch (error) {
+            res.status(500).json({ error: "Erro ao criptografar a senha" });
+          }
+        }
+      );
     });
   });
 });
