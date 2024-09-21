@@ -358,6 +358,34 @@ app.post("/funcionarios", autenticar, async (req, res) => {
   });
 });
 
+// Rota para listar todos os funcionários da mesma empresa
+app.get("/funcionarios", autenticar, (req, res) => {
+  const usuario_id = req.user.id;
+
+  const sqlEmpresaId = "SELECT empresa_id FROM usuarios WHERE id = ?";
+  conexao.query(sqlEmpresaId, [usuario_id], (error, results) => {
+    if (error || results.length === 0 || !results[0].empresa_id) {
+      return res.status(500).json({ error: "Erro ao obter empresa_id" });
+    }
+
+    const empresaId = results[0].empresa_id;
+
+    const sqlUsuarios =
+      "SELECT * FROM usuarios WHERE empresa_id = ? AND (tipo = 'funcionario' OR tipo = 'admin')";
+    conexao.query(sqlUsuarios, [empresaId], (error, usuarios) => {
+      if (error) {
+        return res.status(500).json({ error: "Erro ao buscar usuários" });
+      }
+      res.status(200).json(usuarios);
+    });
+  });
+});
+
+// Rota para listar todas as empresas
+app.get("/empresas", (req, res) => {
+  listarEmpresas(res);
+});
+
 // Rota para gerar PDF
 app.get("/folha-ponto/:id", autenticar, (req, res) => {
   const id = req.params.id;
@@ -418,11 +446,6 @@ app.get("/folha-ponto/:id", autenticar, (req, res) => {
       folhaPonto(usuario, registros, res);
     });
   });
-});
-
-// Rota para listar todas as empresas
-app.get("/empresas", (req, res) => {
-  listarEmpresas(res);
 });
 
 // Executando o servidor
