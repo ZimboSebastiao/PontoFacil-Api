@@ -406,6 +406,140 @@ app.get("/empresas", (req, res) => {
   listarEmpresas(res);
 });
 
+// Rota para listar todos os funcionários da empresa do admin
+app.get("/funcionarios/listar", autenticar, (req, res) => {
+  const adminId = req.user.id;
+
+  // Verificar se o usuário autenticado é um admin
+  const sqlAdmin = "SELECT * FROM usuarios WHERE id = ? AND tipo = 'admin'";
+  conexao.query(sqlAdmin, [adminId], (err, results) => {
+    if (err) {
+      console.error("Erro ao verificar admin:", err);
+      return res.status(500).json({ error: "Erro ao verificar admin" });
+    }
+
+    if (results.length === 0) {
+      return res.status(403).json({
+        error: "Acesso negado. Somente admins podem listar funcionários.",
+      });
+    }
+
+    // Obter o empresa_id do admin
+    const sqlEmpresaId = "SELECT empresa_id FROM usuarios WHERE id = ?";
+    conexao.query(sqlEmpresaId, [adminId], (error, empresaResults) => {
+      if (error) {
+        return res.status(500).json({ error: "Erro ao obter empresa_id" });
+      }
+
+      if (empresaResults.length === 0) {
+        return res.status(400).json({ error: "Admin não encontrado" });
+      }
+
+      const empresaId = empresaResults[0].empresa_id;
+
+      // Listar todos os funcionários da empresa
+      const sqlFuncionarios =
+        "SELECT * FROM usuarios WHERE empresa_id = ? AND tipo = 'funcionario'";
+      conexao.query(sqlFuncionarios, [empresaId], (error, funcionarios) => {
+        if (error) {
+          return res.status(500).json({ error: "Erro ao buscar funcionários" });
+        }
+        res.status(200).json(funcionarios);
+      });
+    });
+  });
+});
+
+// Rota para deletar um funcionário
+app.delete("/funcionarios/:id", autenticar, (req, res) => {
+  const adminId = req.user.id;
+  const funcionarioId = req.params.id;
+
+  // Verificar se o usuário autenticado é um admin
+  const sqlAdmin = "SELECT * FROM usuarios WHERE id = ? AND tipo = 'admin'";
+  conexao.query(sqlAdmin, [adminId], (err, results) => {
+    if (err) {
+      console.error("Erro ao verificar admin:", err);
+      return res.status(500).json({ error: "Erro ao verificar admin" });
+    }
+
+    if (results.length === 0) {
+      return res.status(403).json({
+        error: "Acesso negado. Somente admins podem deletar funcionários.",
+      });
+    }
+
+    // Obter o empresa_id do admin
+    const sqlEmpresaId = "SELECT empresa_id FROM usuarios WHERE id = ?";
+    conexao.query(sqlEmpresaId, [adminId], (error, empresaResults) => {
+      if (error) {
+        return res.status(500).json({ error: "Erro ao obter empresa_id" });
+      }
+
+      if (empresaResults.length === 0) {
+        return res.status(400).json({ error: "Admin não encontrado" });
+      }
+
+      const empresaId = empresaResults[0].empresa_id; // Certifique-se de que esta linha está antes de usá-la
+
+      // Verificar se o funcionário pertence à mesma empresa
+      const sqlVerificaFuncionario =
+        "SELECT * FROM usuarios WHERE id = ? AND empresa_id = ?";
+      conexao.query(
+        sqlVerificaFuncionario,
+        [funcionarioId, empresaId],
+        (error, funcionarioResults) => {
+          if (error) {
+            return res
+              .status(500)
+              .json({ error: "Erro ao verificar funcionário" });
+          }
+
+          if (funcionarioResults.length === 0) {
+            return res
+              .status(404)
+              .json({
+                error: "Funcionário não encontrado ou não pertence à empresa",
+              });
+          }
+
+          // Deletar os registros associados ao funcionário
+          const sqlDeleteRegistros =
+            "DELETE FROM registros WHERE usuario_id = ?";
+          conexao.query(sqlDeleteRegistros, [funcionarioId], (error) => {
+            if (error) {
+              console.error("Erro ao deletar registros:", error);
+              return res
+                .status(500)
+                .json({ error: "Erro ao deletar registros do funcionário" });
+            }
+
+            // Deletar o funcionário
+            const sqlDelete = "DELETE FROM usuarios WHERE id = ?";
+            conexao.query(
+              sqlDelete,
+              [funcionarioId],
+              (error, deleteResults) => {
+                if (error) {
+                  console.error("Erro ao deletar funcionário:", error);
+                  return res
+                    .status(500)
+                    .json({ error: "Erro ao deletar funcionário" });
+                }
+                res
+                  .status(200)
+                  .json({
+                    message: "Funcionário e registros deletados com sucesso",
+                  });
+              }
+            );
+          });
+        }
+      );
+    });
+  });
+});
+
 // Rota para gerar PDF
 app.get("/folha-ponto/:id", autenticar, (req, res) => {
   const id = req.params.id;
