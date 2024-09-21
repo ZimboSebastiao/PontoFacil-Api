@@ -297,7 +297,7 @@ app.get("/registros/ultimos-7-dias", autenticar, (req, res) => {
 // Rota para criar funcionários (somente admin)
 app.post("/funcionarios", autenticar, async (req, res) => {
   const adminId = req.user.id;
-  const { nome, email, senha, tipo } = req.body;
+  const { nome, email, senha } = req.body; // Removido 'tipo' já que é fixo como 'funcionario'
 
   // Verificar se o usuário autenticado é um admin
   const sqlAdmin = "SELECT * FROM usuarios WHERE id = ? AND tipo = 'admin'";
@@ -313,32 +313,48 @@ app.post("/funcionarios", autenticar, async (req, res) => {
       });
     }
 
-    // Criptografar a senha
-    try {
-      const saltRounds = 10;
-      const hashedPassword = await bcrypt.hash(senha, saltRounds);
+    // Obter o empresa_id
+    const sqlEmpresaId = "SELECT empresa_id FROM usuarios WHERE id = ?";
+    conexao.query(sqlEmpresaId, [adminId], async (error, empresaResults) => {
+      if (error) {
+        return res.status(500).json({ error: "Erro ao obter empresa_id" });
+      }
 
-      // Inserir o novo funcionário no banco
-      const sqlInsert =
-        "INSERT INTO usuarios (nome, email, senha, tipo, empresa_id) VALUES (?, ?, ?, 'funcionario', (SELECT empresa_id FROM usuarios WHERE id = ?))";
-      conexao.query(
-        sqlInsert,
-        [nome, email, hashedPassword, adminId],
-        (error, results) => {
-          if (error) {
-            if (error.code === "ER_DUP_ENTRY") {
-              res.status(400).json({ error: "Email já existe" });
+      if (empresaResults.length === 0) {
+        return res.status(400).json({ error: "Admin não encontrado" });
+      }
+
+      const empresaId = empresaResults[0].empresa_id;
+
+      // Criptografar a senha
+      try {
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(senha, saltRounds);
+
+        // Inserir o novo funcionário no banco
+        const sqlInsert =
+          "INSERT INTO usuarios (nome, email, senha, tipo, empresa_id) VALUES (?, ?, ?, 'funcionario', ?)";
+        conexao.query(
+          sqlInsert,
+          [nome, email, hashedPassword, empresaId],
+          (error, results) => {
+            if (error) {
+              if (error.code === "ER_DUP_ENTRY") {
+                res.status(400).json({ error: "Email já existe" });
+              } else {
+                res.status(400).json(error.code);
+              }
             } else {
-              res.status(400).json(error.code);
+              res
+                .status(201)
+                .json({ status: "Funcionário criado com sucesso" });
             }
-          } else {
-            res.status(201).json({ status: "Funcionário criado com sucesso" });
           }
-        }
-      );
-    } catch (error) {
-      res.status(500).json({ error: "Erro ao criptografar a senha" });
-    }
+        );
+      } catch (error) {
+        res.status(500).json({ error: "Erro ao criptografar a senha" });
+      }
+    });
   });
 });
 
