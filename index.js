@@ -439,7 +439,7 @@ app.get("/funcionarios/listar", autenticar, (req, res) => {
 
       // Listar todos os funcionários da empresa
       const sqlFuncionarios =
-        "SELECT * FROM usuarios WHERE empresa_id = ? AND tipo = 'funcionario'";
+        "SELECT * FROM usuarios WHERE empresa_id = ? AND tipo = 'funcionario' ORDER BY nome";
       conexao.query(sqlFuncionarios, [empresaId], (error, funcionarios) => {
         if (error) {
           return res.status(500).json({ error: "Erro ao buscar funcionários" });
@@ -496,11 +496,9 @@ app.delete("/funcionarios/:id", autenticar, (req, res) => {
           }
 
           if (funcionarioResults.length === 0) {
-            return res
-              .status(404)
-              .json({
-                error: "Funcionário não encontrado ou não pertence à empresa",
-              });
+            return res.status(404).json({
+              error: "Funcionário não encontrado ou não pertence à empresa",
+            });
           }
 
           // Deletar os registros associados ao funcionário
@@ -526,16 +524,72 @@ app.delete("/funcionarios/:id", autenticar, (req, res) => {
                     .status(500)
                     .json({ error: "Erro ao deletar funcionário" });
                 }
-                res
-                  .status(200)
-                  .json({
-                    message: "Funcionário e registros deletados com sucesso",
-                  });
+                res.status(200).json({
+                  message: "Funcionário e registros deletados com sucesso",
+                });
               }
             );
           });
         }
       );
+    });
+  });
+});
+
+// Rota para pesquisar funcionários da empresa do admin
+app.get("/funcionarios/pesquisar", autenticar, (req, res) => {
+  const adminId = req.user.id;
+  const { nome, email } = req.query; // Aceita parâmetros de consulta
+
+  // Verificar se o usuário autenticado é um admin
+  const sqlAdmin = "SELECT * FROM usuarios WHERE id = ? AND tipo = 'admin'";
+  conexao.query(sqlAdmin, [adminId], (err, results) => {
+    if (err) {
+      console.error("Erro ao verificar admin:", err);
+      return res.status(500).json({ error: "Erro ao verificar admin" });
+    }
+
+    if (results.length === 0) {
+      return res.status(403).json({
+        error: "Acesso negado. Somente admins podem pesquisar funcionários.",
+      });
+    }
+
+    // Obter o empresa_id do admin
+    const sqlEmpresaId = "SELECT empresa_id FROM usuarios WHERE id = ?";
+    conexao.query(sqlEmpresaId, [adminId], (error, empresaResults) => {
+      if (error) {
+        return res.status(500).json({ error: "Erro ao obter empresa_id" });
+      }
+
+      if (empresaResults.length === 0) {
+        return res.status(400).json({ error: "Admin não encontrado" });
+      }
+
+      const empresaId = empresaResults[0].empresa_id;
+
+      // Construir a consulta para buscar funcionários
+      let sqlFuncionarios =
+        "SELECT * FROM usuarios WHERE empresa_id = ? AND tipo = 'funcionario'";
+      const queryParams = [empresaId];
+
+      // Adicionar filtros de pesquisa, se fornecidos
+      if (nome) {
+        sqlFuncionarios += " AND nome LIKE ?";
+        queryParams.push(`%${nome}%`);
+      }
+
+      if (email) {
+        sqlFuncionarios += " AND email LIKE ?";
+        queryParams.push(`%${email}%`);
+      }
+
+      conexao.query(sqlFuncionarios, queryParams, (error, funcionarios) => {
+        if (error) {
+          return res.status(500).json({ error: "Erro ao buscar funcionários" });
+        }
+        res.status(200).json(funcionarios);
+      });
     });
   });
 });
