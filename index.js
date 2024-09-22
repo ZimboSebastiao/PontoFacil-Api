@@ -40,27 +40,23 @@ app.get("/", (req, res) => {
 
 // Exibindo dados de um usuario
 app.get("/usuarios/:id", (req, res) => {
-  //res.send(`Exibindo dados de um usuario`);
   const id = parseInt(req.params.id);
   lerUm(id, res);
 });
 
 // Exibindo dados de Todos os usuarios
 app.get("/usuarios", (req, res) => {
-  //res.send(`Exibindo dados de todos os usuarios`);
   ler(res);
 });
 
 // Adicionando um usuario
 app.post("/usuarios", (req, res) => {
-  //res.send(`Adicionando um usuario`);
   const novousuario = req.body;
   inserir(novousuario, res);
 });
 
 // Atualizando dados de um usuario
 app.patch("/usuarios/:id", (req, res) => {
-  //res.send(`Atualizando um usuario`);
   const id = parseInt(req.params.id);
   const usuario = req.body;
   atualizar(id, usuario, res);
@@ -68,7 +64,6 @@ app.patch("/usuarios/:id", (req, res) => {
 
 // Deletando dados de um usuario
 app.delete("/usuarios/:id", (req, res) => {
-  //res.send(`Excluindo um usuario`);
   const id = parseInt(req.params.id);
   excluir(id, res);
 });
