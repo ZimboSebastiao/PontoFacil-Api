@@ -10,12 +10,14 @@ import {
   listarEmpresas,
 } from "./src/usuarios.js";
 import folhaPonto from "./src/folhaPonto.js";
+import conexao from "./src/banco.js";
+import { autenticar } from "./src/auth.js";
+
 import cors from "cors";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
-import conexao from "./src/banco.js";
-import { autenticar } from "./src/auth.js";
+import { format } from "date-fns";
 
 dotenv.config();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -587,6 +589,110 @@ app.get("/funcionarios/pesquisar", autenticar, (req, res) => {
       });
     });
   });
+});
+
+// Rota para obter resumo de frequência e horas trabalhadas
+app.get("/frequencia", autenticar, async (req, res) => {
+  const usuario_id = req.user.id;
+
+  try {
+    // Total de horas trabalhadas por dia
+    const sqlTotalHoras = `
+      SELECT 
+        DATE(data_hora) AS dia,
+        SUM(
+          CASE 
+            WHEN tipo_registro = 'saida' THEN TIMESTAMPDIFF(SECOND, 
+                (SELECT data_hora FROM registros r2 WHERE r2.usuario_id = r.usuario_id AND r2.tipo_registro = 'entrada' AND DATE(r2.data_hora) = DATE(r.data_hora) LIMIT 1),
+                r.data_hora
+            )
+            ELSE 0 
+          END
+        ) / 3600 AS horas_trabalhadas
+      FROM registros r
+      WHERE usuario_id = ?
+      GROUP BY DATE(data_hora)
+    `;
+
+    // Calcular intervalo entre início e fim de intervalos
+    const sqlIntervalos = `
+      SELECT 
+        DATE(data_hora) AS dia,
+        TIMESTAMPDIFF(SECOND, 
+          (SELECT data_hora FROM registros WHERE usuario_id = ? AND tipo_registro = 'intervalo' AND DATE(data_hora) = DATE(r.data_hora) LIMIT 1),
+          (SELECT data_hora FROM registros WHERE usuario_id = ? AND tipo_registro = 'fim_intervalo' AND DATE(data_hora) = DATE(r.data_hora) LIMIT 1)
+        ) / 60 AS minutos_intervalo
+      FROM registros r
+      WHERE usuario_id = ?
+      GROUP BY DATE(data_hora)
+    `;
+
+    const [totalHoras] = await conexao
+      .promise()
+      .query(sqlTotalHoras, [usuario_id]);
+    const [intervalos] = await conexao
+      .promise()
+      .query(sqlIntervalos, [usuario_id, usuario_id, usuario_id]);
+
+    // Função para calcular o saldo de horas (8h é o esperado por dia)
+    const calcularSaldo = (horasTrabalhadas) => {
+      const horasEsperadas = 8;
+      const saldo = horasTrabalhadas - horasEsperadas;
+      return saldo > 0
+        ? `${saldo.toFixed(2)} horas extras`
+        : `${Math.abs(saldo).toFixed(2)} horas faltantes`;
+    };
+
+    // Função para verificar alertas de inconsistência
+    const verificarAlertas = (horasTrabalhadas, tipo_registro) => {
+      if (horasTrabalhadas === 0 && tipo_registro === "entrada") {
+        return "Falta de ponto de saída";
+      }
+      return "Nenhum";
+    };
+
+    // Organizando os dados para exibir por dia, semana e mês
+    const resumoDiario = totalHoras.map((dia) => {
+      const horasTrabalhadas = parseFloat(dia.horas_trabalhadas) || 0;
+      const minutosIntervalo =
+        intervalos.find((i) => i.dia === dia.dia)?.minutos_intervalo || 0;
+
+      return {
+        dia: format(new Date(dia.dia), "dd/MM/yyyy"), // Formatação da data
+        horas_trabalhadas: horasTrabalhadas,
+        minutos_intervalo: minutosIntervalo,
+        saldo: calcularSaldo(horasTrabalhadas),
+        alerta: verificarAlertas(horasTrabalhadas, dia.tipo_registro),
+      };
+    });
+
+    // Total de horas trabalhadas na semana (últimos 7 dias)
+    const totalSemanal = resumoDiario
+      .filter(
+        (r) => new Date(r.dia) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      )
+      .reduce((acc, r) => acc + r.horas_trabalhadas, 0);
+
+    // Total de horas trabalhadas no mês atual
+    const totalMensal = resumoDiario
+      .filter((r) => new Date(r.dia).getMonth() === new Date().getMonth())
+      .reduce((acc, r) => acc + r.horas_trabalhadas, 0);
+
+    // Relatório de dias inconsistentes (negativos ou faltantes)
+    const diasInconsistentes = resumoDiario.filter(
+      (r) => r.horas_trabalhadas < 0 || r.alerta !== "Nenhum"
+    );
+
+    res.status(200).json({
+      resumoDiario,
+      totalSemanal: `${totalSemanal.toFixed(2)} horas`,
+      totalMensal: `${totalMensal.toFixed(2)} horas`,
+      diasInconsistentes,
+    });
+  } catch (error) {
+    console.error("Erro ao obter resumo de frequência:", error);
+    res.status(500).json({ message: "Erro ao obter resumo de frequência." });
+  }
 });
 
 // Rota para gerar PDF
