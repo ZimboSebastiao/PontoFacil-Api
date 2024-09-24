@@ -617,7 +617,7 @@ app.get("/frequencia", autenticar, async (req, res) => {
         SUM(
           CASE 
             WHEN tipo_registro = 'saida' THEN TIMESTAMPDIFF(SECOND, 
-                (SELECT data_hora FROM registros r2 WHERE r2.usuario_id = r.usuario_id AND r2.tipo_registro = 'entrada' AND DATE(r2.data_hora) = DATE(r.data_hora) LIMIT 1),
+                (SELECT data_hora FROM registros r2 WHERE r2.usuario_id = r.usuario_id AND r2.tipo_registro = 'entrada' AND DATE(r2.data_hora) = DATE(r.data_hora) ORDER BY data_hora DESC LIMIT 1),
                 r.data_hora
             )
             ELSE 0 
@@ -630,23 +630,29 @@ app.get("/frequencia", autenticar, async (req, res) => {
 
     // Calcular intervalo entre início e fim de intervalos
     const sqlIntervalos = `
-      SELECT 
-        DATE(data_hora) AS dia,
-        TIMESTAMPDIFF(SECOND, 
-          (SELECT data_hora FROM registros WHERE usuario_id = ? AND tipo_registro = 'intervalo' AND DATE(data_hora) = DATE(r.data_hora) LIMIT 1),
-          (SELECT data_hora FROM registros WHERE usuario_id = ? AND tipo_registro = 'fim_intervalo' AND DATE(data_hora) = DATE(r.data_hora) LIMIT 1)
-        ) / 60 AS minutos_intervalo
-      FROM registros r
-      WHERE usuario_id = ?
-      GROUP BY DATE(data_hora)
-    `;
+    SELECT 
+      DATE(i.data_hora) AS dia,
+      SUM(TIMESTAMPDIFF(SECOND, i.data_hora, f.data_hora)) / 60 AS minutos_intervalo
+    FROM registros i
+    JOIN registros f ON i.usuario_id = f.usuario_id 
+                    AND DATE(i.data_hora) = DATE(f.data_hora)
+                    AND f.tipo_registro = 'fim_intervalo'
+    WHERE i.usuario_id = ? 
+      AND i.tipo_registro = 'intervalo'
+    GROUP BY DATE(i.data_hora);
+  `;
+
+    // Executando as consultas
+    const [intervalos] = await conexao
+      .promise()
+      .query(sqlIntervalos, [usuario_id]);
 
     const [totalHoras] = await conexao
       .promise()
       .query(sqlTotalHoras, [usuario_id]);
-    const [intervalos] = await conexao
-      .promise()
-      .query(sqlIntervalos, [usuario_id, usuario_id, usuario_id]);
+
+    console.log("Intervalos retornados:", intervalos);
+    console.log("Total de horas retornadas:", totalHoras);
 
     // Função para calcular o saldo de horas (8h é o esperado por dia)
     const calcularSaldo = (horasTrabalhadas) => {
@@ -658,31 +664,45 @@ app.get("/frequencia", autenticar, async (req, res) => {
     // Organizando os dados para exibir por dia
     const resumoDiario = totalHoras.map((dia) => {
       const horasTrabalhadas = parseFloat(dia.horas_trabalhadas) || 0;
+
+      // Comparar as datas usando o formato 'YYYY-MM-DD' para ignorar o fuso horário
+      const diaFormatado = new Date(dia.dia).toISOString().split("T")[0];
+
+      // Buscar os minutos de intervalo com o formato de data corrigido
       const minutosIntervalo =
-        intervalos.find((i) => i.dia === dia.dia)?.minutos_intervalo || 0;
+        intervalos.find(
+          (i) => new Date(i.dia).toISOString().split("T")[0] === diaFormatado
+        )?.minutos_intervalo || 0;
 
       return {
-        dia: format(new Date(dia.dia), "dd/MM/yyyy"), // Formatação da data
+        dia: format(new Date(dia.dia), "dd/MM/yyyy"), // Formatação da data para exibição
         horas_trabalhadas: horasTrabalhadas,
         minutos_intervalo: minutosIntervalo,
         saldo: calcularSaldo(horasTrabalhadas),
         alerta: verificarAlertas(horasTrabalhadas, dia.tipo_registro),
-        duracao_total_intervalos: minutosIntervalo, // Aqui você pode somar todos os intervalos para obter o total
-        numero_intervalos: minutosIntervalo > 0 ? 1 : 0, // Contar o número de intervalos
+        duracao_total_intervalos: minutosIntervalo,
+        numero_intervalos:
+          minutosIntervalo > 0 ? Math.ceil(minutosIntervalo / 15) : 0, // Contar o número de intervalos
       };
     });
+
+    console.log("Resumo diário:", resumoDiario);
 
     // Total de horas trabalhadas na semana (últimos 7 dias)
     const totalSemanal = resumoDiario
       .filter((r) => {
-        const dia = new Date(r.dia);
+        const dia = new Date(r.dia.split("/").reverse().join("/"));
         return dia >= startOfWeek(new Date()) && dia <= endOfWeek(new Date());
       })
       .reduce((acc, r) => acc + r.horas_trabalhadas, 0);
 
     // Total de horas trabalhadas no mês atual
     const totalMensal = resumoDiario
-      .filter((r) => new Date(r.dia).getMonth() === new Date().getMonth())
+      .filter(
+        (r) =>
+          new Date(r.dia.split("/").reverse().join("/")).getMonth() ===
+          new Date().getMonth()
+      )
       .reduce((acc, r) => acc + r.horas_trabalhadas, 0);
 
     // Total de saldo extra e dias extras
