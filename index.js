@@ -17,7 +17,13 @@ import cors from "cors";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
-import { format } from "date-fns";
+import {
+  format,
+  eachDayOfInterval,
+  isWeekend,
+  startOfWeek,
+  endOfWeek,
+} from "date-fns";
 
 dotenv.config();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -594,6 +600,13 @@ app.get("/funcionarios/pesquisar", autenticar, (req, res) => {
 // Rota para obter resumo de frequência e horas trabalhadas
 app.get("/frequencia", autenticar, async (req, res) => {
   const usuario_id = req.user.id;
+  // Função para verificar alertas de inconsistência
+  const verificarAlertas = (horasTrabalhadas, tipo_registro) => {
+    if (horasTrabalhadas === 0 && tipo_registro === "entrada") {
+      return "Falta de ponto de saída";
+    }
+    return "Nenhum";
+  };
 
   try {
     // Total de horas trabalhadas por dia
@@ -638,17 +651,7 @@ app.get("/frequencia", autenticar, async (req, res) => {
     const calcularSaldo = (horasTrabalhadas) => {
       const horasEsperadas = 8;
       const saldo = horasTrabalhadas - horasEsperadas;
-      return saldo > 0
-        ? `${saldo.toFixed(2)} horas extras`
-        : `${Math.abs(saldo).toFixed(2)} horas faltantes`;
-    };
-
-    // Função para verificar alertas de inconsistência
-    const verificarAlertas = (horasTrabalhadas, tipo_registro) => {
-      if (horasTrabalhadas === 0 && tipo_registro === "entrada") {
-        return "Falta de ponto de saída";
-      }
-      return "Nenhum";
+      return saldo > 0 ? saldo : 0; // Retorna apenas horas extras
     };
 
     // Organizando os dados para exibir por dia, semana e mês
@@ -668,15 +671,40 @@ app.get("/frequencia", autenticar, async (req, res) => {
 
     // Total de horas trabalhadas na semana (últimos 7 dias)
     const totalSemanal = resumoDiario
-      .filter(
-        (r) => new Date(r.dia) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-      )
+      .filter((r) => {
+        const dia = new Date(r.dia);
+        return dia >= startOfWeek(new Date()) && dia <= endOfWeek(new Date());
+      })
       .reduce((acc, r) => acc + r.horas_trabalhadas, 0);
 
     // Total de horas trabalhadas no mês atual
     const totalMensal = resumoDiario
       .filter((r) => new Date(r.dia).getMonth() === new Date().getMonth())
       .reduce((acc, r) => acc + r.horas_trabalhadas, 0);
+
+    // Total de saldo extra e dias extras
+    const totalHorasExtras = resumoDiario.reduce(
+      (acc, r) => acc + (r.saldo > 0 ? r.saldo : 0),
+      0
+    );
+    const diasExtras = resumoDiario
+      .filter((r) => r.saldo > 0)
+      .map((r) => r.dia);
+
+    // Cálculo de dias não trabalhados considerando apenas dias úteis
+    const todosOsDias = eachDayOfInterval({
+      start: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+      end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
+    });
+    const diasTrabalhados = resumoDiario.map((r) => new Date(r.dia).getDay());
+    const diasNaoTrabalhados = todosOsDias.filter((dia) => {
+      const diaDaSemana = dia.getDay();
+      return (
+        diaDaSemana !== 0 &&
+        diaDaSemana !== 6 &&
+        !diasTrabalhados.includes(diaDaSemana)
+      );
+    });
 
     // Relatório de dias inconsistentes (negativos ou faltantes)
     const diasInconsistentes = resumoDiario.filter(
@@ -687,6 +715,9 @@ app.get("/frequencia", autenticar, async (req, res) => {
       resumoDiario,
       totalSemanal: `${totalSemanal.toFixed(2)} horas`,
       totalMensal: `${totalMensal.toFixed(2)} horas`,
+      totalHorasExtras: `${totalHorasExtras.toFixed(2)} horas extras`,
+      diasExtras,
+      totalDiasNaoTrabalhados: diasNaoTrabalhados.length,
       diasInconsistentes,
     });
   } catch (error) {
