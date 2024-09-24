@@ -600,6 +600,7 @@ app.get("/funcionarios/pesquisar", autenticar, (req, res) => {
 // Rota para obter resumo de frequência e horas trabalhadas
 app.get("/frequencia", autenticar, async (req, res) => {
   const usuario_id = req.user.id;
+
   // Função para verificar alertas de inconsistência
   const verificarAlertas = (horasTrabalhadas, tipo_registro) => {
     if (horasTrabalhadas === 0 && tipo_registro === "entrada") {
@@ -654,7 +655,7 @@ app.get("/frequencia", autenticar, async (req, res) => {
       return saldo > 0 ? saldo : 0; // Retorna apenas horas extras
     };
 
-    // Organizando os dados para exibir por dia, semana e mês
+    // Organizando os dados para exibir por dia
     const resumoDiario = totalHoras.map((dia) => {
       const horasTrabalhadas = parseFloat(dia.horas_trabalhadas) || 0;
       const minutosIntervalo =
@@ -666,6 +667,8 @@ app.get("/frequencia", autenticar, async (req, res) => {
         minutos_intervalo: minutosIntervalo,
         saldo: calcularSaldo(horasTrabalhadas),
         alerta: verificarAlertas(horasTrabalhadas, dia.tipo_registro),
+        duracao_total_intervalos: minutosIntervalo, // Aqui você pode somar todos os intervalos para obter o total
+        numero_intervalos: minutosIntervalo > 0 ? 1 : 0, // Contar o número de intervalos
       };
     });
 
@@ -696,14 +699,11 @@ app.get("/frequencia", autenticar, async (req, res) => {
       start: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
       end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
     });
-    const diasTrabalhados = resumoDiario.map((r) => new Date(r.dia).getDay());
+
+    const diasTrabalhados = resumoDiario.map((r) => r.dia);
     const diasNaoTrabalhados = todosOsDias.filter((dia) => {
-      const diaDaSemana = dia.getDay();
-      return (
-        diaDaSemana !== 0 &&
-        diaDaSemana !== 6 &&
-        !diasTrabalhados.includes(diaDaSemana)
-      );
+      const diaFormatado = format(dia, "dd/MM/yyyy");
+      return !diasTrabalhados.includes(diaFormatado);
     });
 
     // Relatório de dias inconsistentes (negativos ou faltantes)
@@ -711,14 +711,42 @@ app.get("/frequencia", autenticar, async (req, res) => {
       (r) => r.horas_trabalhadas < 0 || r.alerta !== "Nenhum"
     );
 
+    // Cálculo dos dias consecutivos sem trabalho
+    const diasConsecutivosSemTrabalho = [];
+    let contadorConsecutivos = 0;
+
+    diasNaoTrabalhados.forEach((dia) => {
+      const diaFormatado = format(dia, "dd/MM/yyyy");
+      contadorConsecutivos++;
+      if (diasNaoTrabalhados[diasNaoTrabalhados.length - 1] === diaFormatado) {
+        diasConsecutivosSemTrabalho.push(contadorConsecutivos);
+      }
+    });
+
+    // Calcular total de horas faltantes (considerando 8 horas por dia)
+    const totalHorasFaltantes = diasNaoTrabalhados.length * 8; // Exemplo simplificado
+
     res.status(200).json({
       resumoDiario,
       totalSemanal: `${totalSemanal.toFixed(2)} horas`,
       totalMensal: `${totalMensal.toFixed(2)} horas`,
+      media_diaria_horas_trabalhadas: `${(
+        totalMensal / (resumoDiario.length || 1)
+      ).toFixed(2)} horas`,
       totalHorasExtras: `${totalHorasExtras.toFixed(2)} horas extras`,
       diasExtras,
       totalDiasNaoTrabalhados: diasNaoTrabalhados.length,
+      diasTrabalhados: resumoDiario.length - diasNaoTrabalhados.length,
+      diasNaoTrabalhados: diasNaoTrabalhados.map((dia) =>
+        format(dia, "dd/MM/yyyy")
+      ),
+      totalHorasFaltantes: `${totalHorasFaltantes.toFixed(2)} horas`,
       diasInconsistentes,
+      alertas: {
+        dias_sem_registro: diasInconsistentes.map((d) => d.dia),
+        dias_consecutivos_sem_trabalho:
+          contadorConsecutivos > 0 ? diasConsecutivosSemTrabalho : [],
+      },
     });
   } catch (error) {
     console.error("Erro ao obter resumo de frequência:", error);
