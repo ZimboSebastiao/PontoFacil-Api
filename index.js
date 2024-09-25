@@ -297,6 +297,33 @@ app.get("/registros/ultimos-7-dias", autenticar, (req, res) => {
   );
 });
 
+// Rota para obter registros dos últimos 15 dias do usuário logado
+app.get("/registros/ultimos-15-dias", autenticar, (req, res) => {
+  const usuario_id = req.user.id; // Obtendo o ID do usuário da autenticação
+
+  const dataFim = new Date();
+  const dataInicio = new Date();
+  dataInicio.setDate(dataFim.getDate() - 15);
+
+  conexao.query(
+    `SELECT * FROM registros 
+     WHERE usuario_id = ? AND data_hora BETWEEN ? AND ?`,
+    [
+      usuario_id,
+      dataInicio.toISOString().slice(0, 19).replace("T", " "),
+      dataFim.toISOString().slice(0, 19).replace("T", " "),
+    ],
+    (error, resultados) => {
+      if (error) {
+        console.error("Erro ao obter registros:", error);
+        return res.status(500).json({ message: "Erro ao obter registros." });
+      }
+
+      res.status(200).json(resultados);
+    }
+  );
+});
+
 // Rota para criar funcionários (somente admin)
 app.post("/funcionarios", autenticar, async (req, res) => {
   const adminId = req.user.id;
